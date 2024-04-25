@@ -6,9 +6,7 @@
   "author": "Laurenz Rausche <laurenz@laurenz-rausche.de>",
   "license": "MIT",
   "private": false,
-  "scripts": {
-    "console:clear": "node -e \"console.clear()\""
-  },
+  "scripts": {},
   "dependencies": {},
   "devDependencies": {},
   "peerDependencies": {}

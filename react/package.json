@@ -11,9 +11,9 @@
     "dist"
   ],
   "scripts": {
-    "prepublish": "npm run build:full",
-    "build:full": "",
-    "console:clear": "node -e \"console.clear()\""
+    "build": "",
+    "example": "",
+    "prepublish": "npm run build"
   },
   "dependencies": {},
   "devDependencies": {},
