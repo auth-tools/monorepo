@@ -1,6 +1,6 @@
 {
   "name": "@auth-tools/react",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "A tool to build a simple auth-server for express with integration for react. (react)",
   "main": "dist/index.js",
   "repository": "https://github.com/auth-tools/monorepo.git",
@@ -11,11 +11,22 @@
     "dist"
   ],
   "scripts": {
-    "build": "",
-    "example": "",
-    "prepublish": "npm run build"
+    "build": "rimraf dist && tsc",
+    "example": "npm run build && cd example && npm run start",
+    "prepublish": "npm run build",
+    "remove": "rimraf node_modules yarn.lock package-lock.json"
   },
   "dependencies": {},
-  "devDependencies": {},
-  "peerDependencies": {}
+  "devDependencies": {
+    "@types/react": "^18.2.79",
+    "@types/react-dom": "^18.2.25",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.4.5"
+  },
+  "peerDependencies": {
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  }
 }
