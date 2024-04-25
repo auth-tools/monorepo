@@ -1,0 +1,21 @@
+{
+  "name": "@auth-tools/react",
+  "version": "0.0.0",
+  "description": "A tool to build a simple auth-server for express with integration for react. (react)",
+  "main": "dist/index.js",
+  "repository": "https://github.com/auth-tools/monorepo.git",
+  "author": "Laurenz Rausche <laurenz@laurenz-rausche.de>",
+  "license": "MIT",
+  "private": false,
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "prepublish": "npm run build:full",
+    "build:full": "",
+    "console:clear": "node -e \"console.clear()\""
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "peerDependencies": {}
+}
