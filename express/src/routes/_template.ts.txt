@@ -1,0 +1,30 @@
+// COPY CODE BELOW
+// REPLACE "ROUTE" WITH NAME OF ROUTE
+// REPLACE "X" WITH ID PREFIX OF ROUTES STATUS CODES
+// CODE HERE = METHODS
+
+import { RequestHandler } from "express";
+import { PassedProps } from "../authInstance";
+import { sendAuthError, sendAuthServerError } from "../senders";
+
+export default function ({
+  config,
+  log,
+  useEventCallbacks,
+  interceptEventCallbacks,
+}: PassedProps): RequestHandler {
+  return async function (req, res) {
+    //check if ROUTE route is disabled
+    if (config.routes.ROUTE === "disabled") {
+      log("debug", "ROUTE ROUTE DISABLED");
+      return sendAuthError(res, 403, X1);
+    }
+
+    try {
+      // CODE HERE
+    } catch (error) {
+      log("warn", String(error));
+      return sendAuthServerError(res);
+    }
+  };
+}

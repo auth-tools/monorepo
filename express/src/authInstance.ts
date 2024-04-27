@@ -1,27 +1,51 @@
 import { RequestHandler, Router } from "express";
 import { createAuthRouter } from "./router";
-import { PasswordValidationRules } from "./validation";
+import {
+  ParsedPasswordValidationRules,
+  PasswordValidationRules,
+} from "./inputValidation";
+import {
+  defaultUseCheckPassword,
+  defaultUseGenId,
+  defaultUseHashPassword,
+  defaultUseValidateMail,
+  defaultUseValidatePassword,
+  undefinedInterceptEvent,
+  undefinedUseEvent,
+} from "./events";
+import {
+  TokenPayload,
+  createAccessTokenValidation,
+  createAccessTokenValidationMiddleware,
+} from "./tokenUtils";
 
 type Promisify<Type> = Promise<Type> | Type;
 type DeepRequired<T> = { [K in keyof T]-?: DeepRequired<T[K]> };
+
+type RouteState = "active" | "disabled" | "removed";
 
 export type AuthConfig = {
   accessTokenSecret: string;
   refreshTokenSecret: string;
   expiresIn?: number;
-  passwordValidation?: PasswordValidationRules;
+  passwordValidation?: boolean;
+  passwordValidationRules?: PasswordValidationRules;
   emailValidation?: boolean;
+  sensitiveApi?: boolean;
+  sensitiveLogs?: boolean;
   routes?: {
-    register?: boolean;
-    login?: boolean;
-    logout?: boolean;
-    refresh?: boolean;
-    check?: boolean;
+    register?: RouteState;
+    login?: RouteState;
+    logout?: RouteState;
+    refresh?: RouteState;
+    check?: RouteState;
   };
 };
 
+export type RequiredAuthConfig = DeepRequired<AuthConfig>;
+
 export type PassedProps = {
-  config: DeepRequired<AuthConfig>;
+  config: RequiredAuthConfig;
   useEventCallbacks: UseEventCallbacks;
   interceptEventCallbacks: InterceptEventCallbacks;
   log: LogFunction;
@@ -36,37 +60,55 @@ export type UserData = {
   username: string;
   hashedPassword: string;
 };
-export type TokenPayload = Pick<UserData, "id">;
 
 type UseEvent<Data, Return = {}> = {
   data: Data;
-  return: { err: boolean } & Return;
+  return: { serverError?: boolean } & Return;
 };
-type UseEvents = {
+export type UseEvents = {
+  //required useEvents
   getUserByMail: UseEvent<{ email: string }, { user: UserData | null }>;
   getUserByName: UseEvent<{ username: string }, { user: UserData | null }>;
-  storeUser: UseEvent<{ user: UserData }>;
+  hashPassword: UseEvent<{ password: string }, { hashedPassword: string }>;
   checkToken: UseEvent<{ token: string }, { exists: boolean }>;
   storeToken: UseEvent<{ token: string }>;
   deleteToken: UseEvent<{ token: string }>;
+  //optional useEvents
+  validateMail: UseEvent<{ email: string }, { isValid: boolean }>;
+  validatePassword: UseEvent<
+    {
+      password: string;
+      passwordRules: PasswordValidationRules;
+      parsedPasswordRules: ParsedPasswordValidationRules;
+    },
+    { isValid: boolean }
+  >;
+  genId: UseEvent<{ username: string; email: string }, { id: string }>;
+  storeUser: UseEvent<{ user: UserData }>;
+  checkPassword: UseEvent<
+    { password: string; hashedPassword: string },
+    { matches: boolean }
+  >;
 };
-type UseEventCallback<Type extends keyof UseEvents> = (
+export type UseEventCallback<Type extends keyof UseEvents> = (
   data: UseEvents[Type]["data"]
 ) => Promisify<UseEvents[Type]["return"]>;
-type UseEventCallbacks = { [Key in keyof UseEvents]: UseEventCallback<Key> };
+export type UseEventCallbacks = {
+  [Key in keyof UseEvents]: UseEventCallback<Key>;
+};
 
 type InterceptEvent<Data> = {
   data: Data;
-  return: { err: boolean; code: number };
+  return: { serverError?: number; intercepted: boolean; interceptCode: number };
 };
-type InterceptEvents = {
+export type InterceptEvents = {
   register: InterceptEvent<{ user: UserData }>;
   login: InterceptEvent<{ user: UserData }>;
-  logout: InterceptEvent<{}>;
-  refresh: InterceptEvent<{}>;
-  check: InterceptEvent<{}>;
+  logout: InterceptEvent<{ payload: TokenPayload; token: string }>;
+  refresh: InterceptEvent<{ payload: TokenPayload; token: string }>;
+  check: InterceptEvent<{ payload: TokenPayload; token: string }>;
 };
-type InterceptEventCallback<Type extends keyof InterceptEvents> = (
+export type InterceptEventCallback<Type extends keyof InterceptEvents> = (
   data: InterceptEvents[Type]["data"]
 ) => Promisify<InterceptEvents[Type]["return"]>;
 type InterceptEventCallbacks = {
@@ -77,31 +119,47 @@ export class AuthInstance {
   public logFunction: LogFunction = console.log;
   public router: Router;
   private useEventCallbacks: UseEventCallbacks = {
-    getUserByMail: this.undefinedUseEvent("getUserByMail", {
-      err: true,
-      user: null,
-    }),
-    getUserByName: this.undefinedUseEvent("getUserByName", {
-      err: true,
-      user: null,
-    }),
-    storeUser: this.undefinedUseEvent("storeUser", { err: true }),
-    checkToken: this.undefinedUseEvent("checkToken", {
-      err: true,
-      exists: false,
-    }),
-    storeToken: this.undefinedUseEvent("storeToken", { err: true }),
-    deleteToken: this.undefinedUseEvent("deleteToken", { err: true }),
+    getUserByMail: undefinedUseEvent(
+      "getUserByMail",
+      {
+        user: null,
+      },
+      this.logFunction
+    ),
+    getUserByName: undefinedUseEvent(
+      "getUserByName",
+      {
+        user: null,
+      },
+      this.logFunction
+    ),
+    storeUser: undefinedUseEvent("storeUser", {}, this.logFunction),
+    checkToken: undefinedUseEvent(
+      "checkToken",
+      {
+        exists: false,
+      },
+      this.logFunction
+    ),
+    storeToken: undefinedUseEvent("storeToken", {}, this.logFunction),
+    deleteToken: undefinedUseEvent("deleteToken", {}, this.logFunction),
+    validateMail: defaultUseValidateMail(),
+    validatePassword: defaultUseValidatePassword(),
+    hashPassword: defaultUseHashPassword(this.logFunction),
+    genId: defaultUseGenId(),
+    checkPassword: defaultUseCheckPassword(this.logFunction),
   };
   private interceptEventCallbacks: InterceptEventCallbacks = {
-    register: this.undefinedInterceptEvent(),
-    login: this.undefinedInterceptEvent(),
-    logout: this.undefinedInterceptEvent(),
-    refresh: this.undefinedInterceptEvent(),
-    check: this.undefinedInterceptEvent(),
+    register: undefinedInterceptEvent(),
+    login: undefinedInterceptEvent(),
+    logout: undefinedInterceptEvent(),
+    refresh: undefinedInterceptEvent(),
+    check: undefinedInterceptEvent(),
   };
-  // public validateAuth:
-  // public validateAuthMiddleware: RequestHandler;
+  public validateAuth: (
+    token?: string
+  ) => ReturnType<ReturnType<typeof createAccessTokenValidation>>;
+  public validateAuthMiddleware: RequestHandler;
 
   constructor(config: AuthConfig) {
     //create the props to pass to handlers with defaults
@@ -110,14 +168,17 @@ export class AuthInstance {
         accessTokenSecret: config.accessTokenSecret,
         refreshTokenSecret: config.refreshTokenSecret,
         expiresIn: config.expiresIn ?? 900,
-        passwordValidation: config.passwordValidation ?? "Y-Y-Y-N-8",
+        passwordValidation: config.passwordValidation ?? true,
+        passwordValidationRules: config.passwordValidationRules ?? "Y-Y-Y-N-8",
         emailValidation: config.emailValidation ?? true,
+        sensitiveApi: config.sensitiveApi ?? true,
+        sensitiveLogs: config.sensitiveLogs ?? false,
         routes: {
-          register: config.routes?.register ?? true,
-          login: config.routes?.login ?? true,
-          logout: config.routes?.logout ?? true,
-          refresh: config.routes?.refresh ?? true,
-          check: config.routes?.check ?? true,
+          register: config.routes?.register ?? "active",
+          login: config.routes?.login ?? "active",
+          logout: config.routes?.logout ?? "active",
+          refresh: config.routes?.refresh ?? "active",
+          check: config.routes?.check ?? "active",
         },
       },
       useEventCallbacks: this.useEventCallbacks,
@@ -127,34 +188,17 @@ export class AuthInstance {
 
     //create Router
     this.router = createAuthRouter(passedProps);
-  }
 
-  //function to error out and complain if an use event is undefined when it is ran
-  private undefinedUseEvent<
-    Event extends keyof UseEvents,
-    Return extends UseEvents[Event]["return"]
-  >(event: Event, returnData: Return): UseEventCallback<Event> {
-    return () => {
-      //complain about unset use event callback
-      this.logFunction(
-        "error",
-        `The "use" event "${event}" was ran but is not set!`
-      );
-      return returnData;
-    };
-  }
+    //create default validator
+    this.validateAuth = createAccessTokenValidation(passedProps);
 
-  //function to error out and complain if an intercept event is undefined when it is ran
-  private undefinedInterceptEvent<
-    Event extends keyof InterceptEvents
-  >(): InterceptEventCallback<Event> {
-    return () => {
-      return { err: false, code: 0 };
-    };
+    //create default validator
+    this.validateAuthMiddleware =
+      createAccessTokenValidationMiddleware(passedProps);
   }
 
   //function to set the logfunction to a user given function
-  public async log(logFunction: LogFunction) {
+  public log(logFunction: LogFunction) {
     this.logFunction = logFunction;
   }
 
