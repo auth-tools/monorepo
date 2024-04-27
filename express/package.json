@@ -16,8 +16,11 @@
     "prepublish": "npm run build",
     "remove": "rimraf node_modules yarn.lock package-lock.json"
   },
-  "dependencies": {},
+  "dependencies": {
+    "express": "^4.19.2"
+  },
   "devDependencies": {
+    "@types/express": "^4.17.21",
     "@types/node": "^20.12.7",
     "rimraf": "^5.0.5",
     "ts-node-dev": "^2.0.0",
