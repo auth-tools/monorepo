@@ -1,4 +1,3 @@
-import { RequestHandler } from "express";
 import { PassedProps, UserData } from "../authInstance";
 import {
   sendAuthError,
@@ -7,13 +6,16 @@ import {
 } from "../senders";
 import { parsePasswordRules } from "../inputValidation";
 import getUserByLogin from "../getUserByLogin";
+import { AuthRequestHandler } from "../router";
+
+type RequestBody = { email: string; username: string; password: string };
 
 export default function ({
   config,
   log,
   useEventCallbacks,
   interceptEventCallbacks,
-}: PassedProps): RequestHandler {
+}: PassedProps): AuthRequestHandler<RequestBody> {
   return async function (req, res) {
     //check if register route is disabled
     if (config.routes.register === "disabled") {
@@ -22,11 +24,7 @@ export default function ({
     }
 
     try {
-      const {
-        email,
-        username,
-        password,
-      }: { email: string; username: string; password: string } = req.body;
+      const { email, username, password } = req.body;
 
       if (!email || !username || !password) {
         log("debug", "EMAIL, USERNAME OR PASSWORD MISSING");

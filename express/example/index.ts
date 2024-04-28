@@ -1,72 +1,217 @@
-import { AuthInstance, UserData } from "../dist";
-import express from "express";
+import AuthInstance, {
+  AuthConfig,
+  AuthResponseLocals,
+  TokenPayload,
+  UserData,
+} from "../dist"; //replace with @auth-tools/express
+import express, { Response } from "express";
+import { Logger } from "./logger";
+import { Database } from "./database";
+import { compare, hash } from "./security";
 
-const USERS: UserData[] = [];
-const TOKENS: string[] = [];
+//create example logger
+const logger = new Logger({ capitalizeLogLevel: true });
 
-const app = express();
-app.use(express.json());
-class Logger {
-  constructor() {
-    this.log = this.log.bind(this);
-  }
-  public log(level: any, data: any) {
-    console.log(level, data);
-  }
-}
+//virtual databases
+const Users = new Database<UserData>();
+const RefreshTokens = new Database<{ refreshToken: string }>();
 
-const auth = new AuthInstance({
-  accessTokenSecret: "a",
-  refreshTokenSecret: "a",
+//config object for auth object
+const authConfig: AuthConfig = {
+  accessTokenSecret: "ACCESS_SECRET", // example values
+  refreshTokenSecret: "REFRESH_SECRET", // example values
+  expiresIn: 600,
+  emailValidation: true,
+  passwordValidation: true,
+  passwordValidationRules: "Y-Y-Y-Y-10",
   sensitiveApi: false,
   sensitiveLogs: false,
-  passwordValidationRules: "Y-Y-Y-Y-12",
-});
+  routes: {
+    register: "active",
+    login: "active",
+    logout: "active",
+    refresh: "active",
+    check: "active",
+  },
+};
 
-const logger = new Logger();
+//create auth instance
+const auth = new AuthInstance(authConfig, logger.log);
 
-auth.log(logger.log);
+// //
+// auth.use("", ({}) => {
+//   return { serverError: false };
+// });
 
+//get a user by his email from database
 auth.use("getUserByMail", ({ email }) => {
-  const user = USERS.find((usr) => usr.email === email);
-  return { user: user || null };
+  const user = Users.findOne("email", email);
+  return { serverError: false, user: user || null };
 });
 
+//get a user by his username from database
 auth.use("getUserByName", ({ username }) => {
-  const user = USERS.find((usr) => usr.username === username);
-  return { user: user || null };
+  const user = Users.findOne("username", username);
+  return { serverError: false, user: user || null };
 });
 
+//store a user in the database
 auth.use("storeUser", ({ user }) => {
-  console.log(user);
-  USERS.push(user);
-  return {};
+  Users.storeOne(user);
+  return { serverError: false };
 });
 
-auth.use("storeToken", ({ token }) => {
-  TOKENS.push(token);
-  return {};
+//check if token exists in database
+auth.use("checkToken", ({ refreshToken }) => {
+  const storedToken = RefreshTokens.exists("refreshToken", refreshToken);
+  return { serverError: false, exists: storedToken };
 });
 
-auth.use("deleteToken", ({ token }) => {
-  TOKENS.splice(TOKENS.indexOf(token), 1);
-  console.log(TOKENS);
-  return {};
+//store token in database
+auth.use("storeToken", ({ refreshToken }) => {
+  RefreshTokens.storeOne({ refreshToken: refreshToken });
+  return { serverError: false };
 });
 
-auth.use("checkToken", ({ token }) => {
-  return { exists: TOKENS.includes(token) };
+//delete token in database
+auth.use("deleteToken", ({ refreshToken }) => {
+  RefreshTokens.deleteOne("refreshToken", refreshToken);
+  return { serverError: false };
 });
 
-auth.intercept("login", () => {
-  console.log(TOKENS);
-  return { intercepted: false, interceptCode: 0 };
+//custom email validation function
+auth.use("validateMail", ({ email }) => {
+  const valid = email.includes("@"); //email must include an @ symbol
+  return { serverError: false, isValid: valid };
 });
 
-auth.intercept("logout", () => {
-  return { intercepted: true, interceptCode: 198 };
+//custom password validation function
+auth.use(
+  "validatePassword",
+  ({
+    password,
+    passwordRules: _passwordRules, // "_" variables used to tell ts compiler to skip unused variable
+    parsedPasswordRules: _parsedPasswordRules, // "_" variables used to tell ts compiler to skip unused variable
+  }) => {
+    const valid = password.length >= 8; //password must be at least 8 characters
+    return { serverError: false, isValid: valid };
+  }
+);
+
+//custom password hashing function
+auth.use("hashPassword", ({ password }) => {
+  const hashedPassword = hash(password); //reverses the original password to hash it (NEVER DO THAT! JUST FOR EASY SHOWCASE)
+  return { serverError: false, hashedPassword: hashedPassword };
 });
 
+auth.use("genId", ({ email: _email, username: _username }) => {
+  // "_" variables used to tell ts compiler to skip unused variable
+  const id = Users.items().toString(); //generate id of user by auto increment ids
+  return { serverError: false, id: id };
+});
+
+//custom password checking function
+auth.use("checkPassword", ({ password, hashedPassword }) => {
+  const matches = compare(password, hashedPassword); //reverses the given password to compare it to hash (NEVER DO THAT! JUST FOR EASY SHOWCASE)
+  return { serverError: false, matches: matches };
+});
+
+// //intercept request of
+// auth.intercept("", () => {
+//   return { serverError: false, intercepted: false, interceptCode: 0 };
+// });
+
+//intercept request of register
+auth.intercept("register", ({ user }) => {
+  logger.log("info", "New user registered:\n" + JSON.stringify(user, null, 2));
+  return { serverError: false, intercepted: false, interceptCode: 0 };
+});
+
+//intercept request of login
+auth.intercept("login", ({ user, accessToken, refreshToken, payload }) => {
+  logger.log(
+    "info",
+    "User logged in:\n" +
+      JSON.stringify(
+        {
+          user: user,
+          accessToken: accessToken,
+          refreshToken: refreshToken,
+          payload: payload,
+        },
+        null,
+        2
+      )
+  );
+  return { serverError: false, intercepted: false, interceptCode: 0 };
+});
+
+//intercept request of logout
+auth.intercept("logout", ({ refreshToken, payload }) => {
+  logger.log(
+    "info",
+    "User logged out:\n" +
+      JSON.stringify(
+        {
+          refreshToken: refreshToken,
+          payload: payload,
+        },
+        null,
+        2
+      )
+  );
+  return { serverError: false, intercepted: false, interceptCode: 0 };
+});
+
+//intercept request of refresh
+auth.intercept("refresh", ({ refreshToken, payload }) => {
+  logger.log(
+    "info",
+    "User refreshed accessToken:\n" +
+      JSON.stringify(
+        {
+          refreshToken: refreshToken,
+          payload: payload,
+        },
+        null,
+        2
+      )
+  );
+  return { serverError: false, intercepted: false, interceptCode: 0 };
+});
+
+//intercept request of check
+auth.intercept("check", ({ accessToken, refreshToken, payload }) => {
+  logger.log(
+    "info",
+    "User checked tokens:\n" +
+      JSON.stringify(
+        {
+          accessToken: accessToken,
+          refreshToken: refreshToken,
+          payload: payload,
+        },
+        null,
+        2
+      )
+  );
+  return { serverError: false, intercepted: false, interceptCode: 0 };
+});
+
+//create express app
+const app = express();
+app.use(express.json());
+
+//use auth router
 app.use("/auth", auth.router);
 
+app.get(
+  "/test",
+  auth.validateAuthMiddleware,
+  (_req, res: Response<{ payload: TokenPayload }, AuthResponseLocals>) => {
+    res.json({ payload: res.locals.payload });
+  }
+);
+
+//start express server
 app.listen(3000);

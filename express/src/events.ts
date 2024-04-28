@@ -9,7 +9,7 @@ import {
 import { validateEmail, validatePassword } from "./inputValidation";
 import { compare, hash } from "bcrypt";
 
-//function to error out and complain if an use event is undefined when it is ran
+//function to error out and complain if a required use event is undefined when it is ran
 export function undefinedUseEvent<
   Event extends keyof UseEvents,
   Return extends UseEvents[Event]["return"]
@@ -27,6 +27,7 @@ export function defaultUseHashPassword(
 ): UseEventCallback<"hashPassword"> {
   return async ({ password }) => {
     try {
+      //hash password with 10 rounds in bcrypt
       const hashedPassword = await hash(password, 10);
       return { hashedPassword: hashedPassword };
     } catch (error) {
@@ -39,6 +40,7 @@ export function defaultUseHashPassword(
 //default use event for genId
 export function defaultUseGenId(): UseEventCallback<"genId"> {
   return () => {
+    //generate id with uuid.v4()
     return { id: v4() };
   };
 }
@@ -49,6 +51,7 @@ export function defaultUseCheckPassword(
 ): UseEventCallback<"checkPassword"> {
   return async ({ password, hashedPassword }) => {
     try {
+      //compaee password to hash with bcrypt
       const matches = await compare(password, hashedPassword);
       return { matches: matches };
     } catch (error) {
@@ -61,6 +64,7 @@ export function defaultUseCheckPassword(
 //default use event for validateMail
 export function defaultUseValidateMail(): UseEventCallback<"validateMail"> {
   return ({ email }) => {
+    //use included input validation validateEmail for email validation
     return { isValid: validateEmail(email) };
   };
 }
@@ -68,11 +72,12 @@ export function defaultUseValidateMail(): UseEventCallback<"validateMail"> {
 //default use event for validatePassword
 export function defaultUseValidatePassword(): UseEventCallback<"validatePassword"> {
   return ({ password, passwordRules }) => {
+    //use included input validation validatePassword for password validation
     return { isValid: validatePassword(password, passwordRules) };
   };
 }
 
-//function to error out and complain if an intercept event is undefined when it is ran
+//function to set intercept event to directly pass
 export function undefinedInterceptEvent<
   Event extends keyof InterceptEvents
 >(): InterceptEventCallback<Event> {

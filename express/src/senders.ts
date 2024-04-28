@@ -1,5 +1,6 @@
 import { Response } from "express";
 
+//standard auth response from authentication server
 type AuthResponse = {
   error: boolean;
   code: number;

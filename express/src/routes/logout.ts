@@ -1,4 +1,3 @@
-import { RequestHandler } from "express";
 import { PassedProps } from "../authInstance";
 import {
   sendAuthError,
@@ -6,13 +5,16 @@ import {
   sendAuthServerError,
 } from "../senders";
 import { decodeToken } from "../tokenUtils";
+import { AuthRequestHandler } from "../router";
+
+type RequestBody = { refreshToken: string };
 
 export default function ({
   config,
   log,
   useEventCallbacks,
   interceptEventCallbacks,
-}: PassedProps): RequestHandler {
+}: PassedProps): AuthRequestHandler<RequestBody> {
   return async function (req, res) {
     //check if logout route is disabled
     if (config.routes.logout === "disabled") {
@@ -21,25 +23,23 @@ export default function ({
     }
 
     try {
-      const { refreshToken }: { refreshToken: string } = req.body;
+      const { refreshToken } = req.body;
 
       if (!refreshToken) {
         log("debug", "REFRESHTOKEN MISSING");
         return sendAuthError(res, 400, 32);
       }
 
-      const { valid, payload } = decodeToken(
-        refreshToken,
-        config.refreshTokenSecret
-      );
+      const { valid: refreshTokenValid, payload: refreshTokenPayload } =
+        decodeToken(refreshToken, config.refreshTokenSecret);
 
-      if (!valid || !payload) {
+      if (!refreshTokenValid || !refreshTokenPayload) {
         log("debug", "THE REFRESHTOKEN IS INVALID");
         return sendAuthError(res, 403, 33);
       }
 
       const { serverError: checkTokenServerError, exists } =
-        await useEventCallbacks.checkToken({ token: refreshToken });
+        await useEventCallbacks.checkToken({ refreshToken: refreshToken });
 
       if (checkTokenServerError) return sendAuthServerError(res);
 
@@ -53,8 +53,8 @@ export default function ({
         intercepted,
         interceptCode,
       } = await interceptEventCallbacks.logout({
-        payload: payload,
-        token: refreshToken,
+        refreshToken: refreshToken,
+        payload: refreshTokenPayload,
       });
 
       if (interceptServerError) return sendAuthServerError(res);
@@ -63,12 +63,12 @@ export default function ({
 
       const { serverError: deleteTokenServerError } =
         await useEventCallbacks.deleteToken({
-          token: refreshToken,
+          refreshToken: refreshToken,
         });
 
       if (deleteTokenServerError) return sendAuthServerError(res);
 
-      return sendAuthResponse(res, 200, 10, null);
+      return sendAuthResponse<null>(res, 200, 10, null);
     } catch (error) {
       log("warn", String(error));
       return sendAuthServerError(res);

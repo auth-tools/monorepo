@@ -1,4 +1,3 @@
-import { RequestHandler } from "express";
 import { PassedProps } from "../authInstance";
 import {
   sendAuthError,
@@ -6,14 +5,17 @@ import {
   sendAuthServerError,
 } from "../senders";
 import getUserByLogin from "../getUserByLogin";
-import { generateToken } from "../tokenUtils";
+import { TokenPayload, generateToken } from "../tokenUtils";
+import { AuthRequestHandler } from "../router";
+
+type RequestBody = { login: string; password: string };
 
 export default function ({
   config,
   log,
   useEventCallbacks,
   interceptEventCallbacks,
-}: PassedProps): RequestHandler {
+}: PassedProps): AuthRequestHandler<RequestBody> {
   return async function (req, res) {
     //check if login route is disabled
     if (config.routes.login === "disabled") {
@@ -22,7 +24,7 @@ export default function ({
     }
 
     try {
-      const { login, password }: { login: string; password: string } = req.body;
+      const { login, password } = req.body;
 
       if (!login || !password) {
         log("debug", "LOGIN OR PASSWORD MISSING");
@@ -57,30 +59,34 @@ export default function ({
         else return sendAuthError(res, 403, 24);
       }
 
+      const payload: TokenPayload = { id: user.id };
+
+      const refreshToken = generateToken(payload, config.refreshTokenSecret);
+
+      const accessToken = generateToken(
+        payload,
+        config.accessTokenSecret,
+        config.expiresIn
+      );
+
       const {
         serverError: interceptServerError,
         intercepted,
         interceptCode,
-      } = await interceptEventCallbacks.login({ user: user });
+      } = await interceptEventCallbacks.login({
+        user: user,
+        accessToken: accessToken,
+        refreshToken: refreshToken,
+        payload: payload,
+      });
 
       if (interceptServerError) return sendAuthServerError(res);
 
       if (intercepted) return sendAuthError(res, 403, 29, interceptCode);
 
-      const refreshToken = generateToken(
-        { id: user.id },
-        config.refreshTokenSecret
-      );
-
-      const accessToken = generateToken(
-        { id: user.id },
-        config.refreshTokenSecret,
-        config.expiresIn
-      );
-
       const { serverError: storeTokenServerError } =
         await useEventCallbacks.storeToken({
-          token: refreshToken,
+          refreshToken: refreshToken,
         });
 
       if (storeTokenServerError) return sendAuthServerError(res);
