@@ -3,6 +3,7 @@ import AuthInstance, {
   AuthResponseLocals,
   TokenPayload,
   UserData,
+  sendData,
 } from "../dist"; //replace with @auth-tools/express
 import express, { Response } from "express";
 import { Logger } from "./logger";
@@ -23,7 +24,7 @@ const authConfig: AuthConfig = {
   expiresIn: 600,
   emailValidation: true,
   passwordValidation: true,
-  passwordValidationRules: "Y-Y-Y-Y-10",
+  passwordValidationRules: "Y-Y-Y-Y-10", // unused because custom use validatePassword does not use it
   sensitiveApi: false,
   sensitiveLogs: false,
   routes: {
@@ -43,49 +44,49 @@ const auth = new AuthInstance(authConfig, logger.log);
 //   return { serverError: false };
 // });
 
-//get a user by his email from database
+//get a user by his email from database (required)
 auth.use("getUserByMail", ({ email }) => {
   const user = Users.findOne("email", email);
   return { serverError: false, user: user || null };
 });
 
-//get a user by his username from database
+//get a user by his username from database (required)
 auth.use("getUserByName", ({ username }) => {
   const user = Users.findOne("username", username);
   return { serverError: false, user: user || null };
 });
 
-//store a user in the database
+//store a user in the database (required)
 auth.use("storeUser", ({ user }) => {
   Users.storeOne(user);
   return { serverError: false };
 });
 
-//check if token exists in database
+//check if token exists in database (required)
 auth.use("checkToken", ({ refreshToken }) => {
   const storedToken = RefreshTokens.exists("refreshToken", refreshToken);
   return { serverError: false, exists: storedToken };
 });
 
-//store token in database
+//store token in database (required)
 auth.use("storeToken", ({ refreshToken }) => {
   RefreshTokens.storeOne({ refreshToken: refreshToken });
   return { serverError: false };
 });
 
-//delete token in database
+//delete token in database (required)
 auth.use("deleteToken", ({ refreshToken }) => {
   RefreshTokens.deleteOne("refreshToken", refreshToken);
   return { serverError: false };
 });
 
-//custom email validation function
+//custom email validation function (not required)
 auth.use("validateMail", ({ email }) => {
   const valid = email.includes("@"); //email must include an @ symbol
   return { serverError: false, isValid: valid };
 });
 
-//custom password validation function
+//custom password validation function (not required)
 auth.use(
   "validatePassword",
   ({
@@ -98,25 +99,26 @@ auth.use(
   }
 );
 
-//custom password hashing function
+//custom password hashing function (not required)
 auth.use("hashPassword", ({ password }) => {
   const hashedPassword = hash(password); //reverses the original password to hash it (NEVER DO THAT! JUST FOR EASY SHOWCASE)
   return { serverError: false, hashedPassword: hashedPassword };
 });
 
+//custom id generation function (not required)
 auth.use("genId", ({ email: _email, username: _username }) => {
   // "_" variables used to tell ts compiler to skip unused variable
   const id = Users.items().toString(); //generate id of user by auto increment ids
   return { serverError: false, id: id };
 });
 
-//custom password checking function
+//custom password checking function (not required)
 auth.use("checkPassword", ({ password, hashedPassword }) => {
   const matches = compare(password, hashedPassword); //reverses the given password to compare it to hash (NEVER DO THAT! JUST FOR EASY SHOWCASE)
   return { serverError: false, matches: matches };
 });
 
-// //intercept request of
+// // intercept request of
 // auth.intercept("", () => {
 //   return { serverError: false, intercepted: false, interceptCode: 0 };
 // });
@@ -205,11 +207,45 @@ app.use(express.json());
 //use auth router
 app.use("/auth", auth.router);
 
+//basic api route
 app.get(
-  "/test",
+  "/api/checkValidators",
+  //validate that user is logged in
   auth.validateAuthMiddleware,
-  (_req, res: Response<{ payload: TokenPayload }, AuthResponseLocals>) => {
-    res.json({ payload: res.locals.payload });
+  async (
+    _req,
+    res: Response<{ payload: TokenPayload }, AuthResponseLocals>
+  ) => {
+    //send response data with custom sendData function
+    sendData(res, 200, {
+      payload: res.locals.payload,
+      //check if example password is valid
+      password: {
+        //valid example
+        valid: {
+          example: "Test1234",
+          ...(await auth.validatePassword("Test1234")),
+        },
+        //invalid example
+        invalid: {
+          example: "Test",
+          ...(await auth.validatePassword("Test")),
+        },
+      },
+      //check if example email is valid
+      email: {
+        //valid example
+        valid: {
+          example: "Test@1234",
+          ...(await auth.validateEmail("Test@1234")),
+        },
+        //invalid example
+        invalid: {
+          example: "Test",
+          ...(await auth.validatePassword("Test")),
+        },
+      },
+    });
   }
 );
 
