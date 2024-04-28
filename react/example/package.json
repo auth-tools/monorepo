@@ -1,0 +1,28 @@
+{
+  "name": "@auth-tools/react_example",
+  "version": "0.0.1",
+  "description": "A tool to build a simple auth-server for express with integration for react. (react-example)",
+  "main": "dist/index.js",
+  "repository": "https://github.com/auth-tools/monorepo.git",
+  "author": "Laurenz Rausche <laurenz@laurenz-rausche.de>",
+  "license": "MIT",
+  "private": false,
+  "type": "module",
+  "scripts": {
+    "start": "vite",
+    "remove": "rimraf node_modules yarn.lock package-lock.json"
+  },
+  "dependencies": {
+    "@authfunctions/react": "link:..",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@vitejs/plugin-react": "^4.2.1",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.2.2",
+    "vite": "^5.2.0"
+  }
+}
