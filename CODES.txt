@@ -17,7 +17,7 @@ CODE -> INTERCEPT -> HTTP -> DESCRIPTION
 ...
 19   -> CUSTOM    -> 403  -> THE REQUEST TO REGISTER WAS INTERCEPTED
 
-20   -> 0         -> 201 -> LOGIN SUCCESSFULL
+20   -> 0         -> 201  -> LOGIN SUCCESSFULL
 21   -> 0         -> 403  -> LOGIN ROUTE DISABLED
 22   -> 0         -> 400  -> LOGIN OR PASSWORD MISSING
 23   -> 0         -> 404  -> USER WAS NOT FOUND (in unsensitive mode)
