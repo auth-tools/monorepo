@@ -3,6 +3,7 @@ import { createAuthRouter } from "./router";
 import {
   ParsedPasswordValidationRules,
   PasswordValidationRules,
+  parsePasswordRules,
 } from "./inputValidation";
 import {
   defaultUseCheckPassword,
@@ -160,6 +161,12 @@ export class AuthInstance {
     token?: string
   ) => ReturnType<ReturnType<typeof createAccessTokenValidation>>;
   public validateAuthMiddleware: RequestHandler;
+  public validateEmail: (
+    email: string
+  ) => Promise<UseEvents["validateMail"]["return"]>;
+  public validatePassword: (
+    password: string
+  ) => Promise<UseEvents["validatePassword"]["return"]>;
 
   constructor(config: AuthConfig) {
     //create the props to pass to handlers with defaults
@@ -186,15 +193,26 @@ export class AuthInstance {
       log: this.logFunction,
     };
 
-    //create Router
     this.router = createAuthRouter(passedProps);
 
-    //create default validator
     this.validateAuth = createAccessTokenValidation(passedProps);
 
-    //create default validator
     this.validateAuthMiddleware =
       createAccessTokenValidationMiddleware(passedProps);
+
+    this.validateEmail = async (email) => {
+      return await this.useEventCallbacks.validateMail({ email: email });
+    };
+
+    this.validatePassword = async (password) => {
+      return await this.useEventCallbacks.validatePassword({
+        password: password,
+        passwordRules: passedProps.config.passwordValidationRules,
+        parsedPasswordRules: parsePasswordRules(
+          passedProps.config.passwordValidationRules
+        ),
+      });
+    };
   }
 
   //function to set the logfunction to a user given function
