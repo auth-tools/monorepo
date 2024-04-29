@@ -13,7 +13,7 @@
     "remove": "rimraf node_modules yarn.lock package-lock.json"
   },
   "dependencies": {
-    "@authfunctions/react": "link:..",
+    "@auth-tools/react": "link:..",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },

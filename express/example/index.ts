@@ -4,7 +4,7 @@ import AuthInstance, {
   TokenPayload,
   UserData,
   sendData,
-} from "../dist"; //replace with @auth-tools/express
+} from "@auth-tools/express";
 import express, { Response } from "express";
 import { Logger } from "./logger";
 import { Database } from "./database";
